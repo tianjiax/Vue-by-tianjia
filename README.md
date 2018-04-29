@@ -1,5 +1,295 @@
 # Vue-by-tianjia
 对vue官网文档的一些个人总结，vue开发中遇到的一些问题及解决方法记录。
+### Vue组件生命周期方法及调用的时机
+官网流程图
+![image](https://cn.vuejs.org/images/lifecycle.png)
+对应生命周期方法及调用的时机
+![image](https://s1.ax1x.com/2018/04/29/CGiVZn.png)
+
+### self.a = self.b 同步改变问题
+在vue中，如果多个组件引用了同一个对象作为数据，那么当其中一个组件改动对象数据时，其他对象的数据也会同步改动。有这种双向绑定的需要的话，那么自然是最好的，但如果不需要这种绑定而希望各组件的对象数据之间相互独立，即是互不关联的对象副本的话，可以用下面的方法解决。
+```js
+ var obj={};  
+ // JSON.parse() 方法将数据转换为 JavaScript 对象。
+ // JSON.stringify() 方法用于将 JavaScript 值转换为 JSON 字符串。
+ obj=JSON.parse(JSON.stringify(this.templateData)); //this.templateData是父组件传递的对象  
+ return obj  
+```
+
+### 去除vue-cli的/#/号链接
+进入src目录下面的router的index.js文件，
+在路由配置内部配置即可以去除。
+```js
+// vue-router 默认 hash 模式 —— 使用 URL 的 hash 来模拟一个完整的 URL，于是当 URL 改变时，页面不会重新加载。
+// 如果不想要很丑的 hash，我们可以用路由的 history 模式，这种模式充分利用 history.pushState API 来完成 URL 跳转而无须重新加载页面。
+export default new Router({
+    mode: 'history', // 可以是去掉#号
+})
+```
+
+## 组件
+https://cn.vuejs.org/v2/guide/components.html
+### 父子组件传递
+组件实例的作用域是孤立的。这意味着不能 (也不应该) 在子组件的模板内直接引用父组件的数据。父组件的数据需要通过 prop 才能下发到子组件中。
+
+> HTML 特性是不区分大小写的。所以，当使用的不是字符串模板时，camelCase (驼峰式命名) 的 prop 需要转换为相对应的 kebab-case (短横线分隔式命名)：
+
+##### 静态 Prop
+```html
+<!-- 父级html-->
+<child my-message="hello!"></child>
+<!--<child message="hello!"></child>-->
+```
+```js
+// 组件方法
+Vue.component('child', {
+  // 声明 props
+  props: ['myMessage'],
+  // props: ['message'],
+  // 就像 data 一样，prop 也可以在模板中使用
+  // 同样也可以在 vm 实例中通过 this.message 来使用
+  template: '<span>{{ message }}</span>'
+})
+```
+如果你使用字符串模板，则没有这些限制。
+
+##### 单向数据流
+==Prop 是单向绑定的：当父组件的属性变化时，将传导给子组件，但是反过来不会。==
+这是为了防止子组件无意间修改了父组件的状态，来避免应用的数据流变得难以理解。
+
+另外，每次父组件更新时，子组件的所有 prop 都会更新为最新值。这意味着你不应该在子组件内部改变 prop。如果你这么做了，Vue 会在控制台给出警告。
+
+在两种情况下，我们很容易忍不住想去修改 prop 中数据：
+
+1. Prop 作为初始值传入后，子组件想把它当作局部数据来用；
+
+1. Prop 作为原始数据传入，由子组件处理成其它数据输出。
+
+对这两种情况，正确的应对方式是：
+
+定义一个局部变量，并用 prop 的值初始化它：
+```js
+props: ['initialCounter'],
+data: function () {
+  return { counter: this.initialCounter }
+}
+```
+定义一个计算属性，处理 prop 的值并返回：
+```js
+props: ['size'],
+computed: {
+  normalizedSize: function () {
+    return this.size.trim().toLowerCase()
+  }
+}
+```
+> 注意在 JavaScript 中对象和数组是引用类型，指向同一个内存空间，如果 prop 是一个对象或数组，在子组件内部改变它会影响父组件的状态。
+
+##### 动态 Prop
+与绑定到任何普通的 HTML 特性相类似，我们可以用 v-bind 来动态地将 prop 绑定到父组件的数据。每当父组件的数据变化时，该变化也会传导给子组件：
+
+```html
+<div id="prop-example-2">
+  <input v-model="parentMsg">
+  <br>
+  <child v-bind:my-message="parentMsg"></child>
+</div>
+```
+```js
+new Vue({
+  el: '#prop-example-2',
+  data: {
+    parentMsg: 'Message from parent'
+  }
+})
+```
+你也可以使用 v-bind 的缩写语法：
+```html
+<child :my-message="parentMsg"></child>
+```
+
+如果你想把一个对象的所有属性作为 prop 进行传递，可以使用不带任何参数的 v-bind (即用 v-bind 而不是 v-bind:prop-name)。例如，已知一个 todo 对象：
+```js
+todo: {
+  text: 'Learn Vue',
+  isComplete: false
+}
+```
+然后：
+```html
+<todo-item v-bind="todo"></todo-item>
+```
+将等价于：
+```html
+<todo-item
+  v-bind:text="todo.text"
+  v-bind:is-complete="todo.isComplete"
+></todo-item>
+```
+##### Prop 验证
+我们可以为组件的 prop 指定需求。如果有一个需求没有被满足，则 Vue 会在浏览器控制台中警告你。这在开发一个会被别人用到的组件时尤其有帮助。
+
+为了定制 prop 的验证方式，你可以为 props 中的值提供一个带有验证需求的对象，而不是一个字符串数组。例如：
+```js
+// props中的值的type属性
+// 传值修改1个另外一个不会被修改
+// 传引用会同步修改
+// 传值：string number boolean
+// 传引用：array object
+Vue.component('my-component', {
+  props: {
+    // 基础的类型检查 (`null` 匹配任何类型)
+    propA: Number,
+    // 多个可能的类型
+    propB: [String, Number],
+    // 必填的字符串
+    propC: {
+      type: String,
+      required: true
+    },
+    // 带有默认值的数字
+    propD: {
+      type: Number,
+      default: 100
+    },
+    // 带有默认值的对象
+    propE: {
+      type: Object,
+      // 对象或数组且一定会从一个工厂函数返回默认值
+      default: function () {
+        return { message: 'hello' }
+      }
+    },
+    // 自定义验证函数
+    propF: {
+      validator: function (value) {
+        // 这个值必须匹配下列字符串中的一个
+        return ['success', 'warning', 'danger'].indexOf(value) !== -1
+      }
+    }
+  }
+})
+```
+当 prop 验证失败的时候，(开发环境构建版本的) Vue 将会产生一个控制台的警告。
+
+ > 注意那些 prop 会在一个组件实例创建之前进行验证，所以实例的属性 (如 data、computed 等) 在 default 或 validator 函数中是不可用的。
+
+### 子父组件传递
+##### 使用 v-on 绑定自定义事件
+每个 Vue 实例都实现了事件接口，即：
+
+- 使用 $on(eventName) 监听事件
+- 使用 $emit(eventName, optionalPayload) 触发事件
+
+Vue 的事件系统与浏览器的 EventTarget API 有所不同。尽管它们运行起来类似，但是 ==$on== 和 ==$emit== 并不是addEventListener 和 dispatchEvent 的别名。
+
+另外，父组件可以在使用子组件的地方直接用 v-on 来监听子组件触发的事件。
+
+不能用 ==$on== 监听子组件释放的事件，而必须在模板里直接用 ==v-on== 绑定，参见下面的例子。
+
+下面是一个例子：
+```html
+<div id="counter-event-example">
+  <p>{{ total }}</p>
+  <button-counter v-on:increment="incrementTotal"></button-counter>
+  <button-counter v-on:increment="incrementTotal"></button-counter>
+</div>
+```
+```js
+Vue.component('button-counter', {
+  template: '<button v-on:click="incrementCounter">{{ counter }}</button>',
+  data: function () {
+    return {
+      counter: 0
+    }
+  },
+  methods: {
+    incrementCounter: function () {
+      this.counter += 1
+      this.$emit('increment')
+    }
+  },
+})
+```
+```js
+new Vue({
+  el: '#counter-event-example',
+  data: {
+    total: 0
+  },
+  methods: {
+    incrementTotal: function () {
+      this.total += 1
+    }
+  }
+})
+```
+在本例中，子组件已经和它外部完全解耦了。它所做的只是报告自己的内部事件，因为父组件可能会关心这些事件。请注意这一点很重要。
+
+这里有一个如何使用载荷 (payload) 数据的示例：
+```html
+<div id="message-event-example" class="demo">
+  <p v-for="msg in messages">{{ msg }}</p>
+  <button-message v-on:message="handleMessage"></button-message>
+</div>
+```
+```js
+Vue.component('button-message', {
+  template: `<div>
+    <input type="text" v-model="message" />
+    <button v-on:click="handleSendMessage">Send</button>
+  </div>`,
+  data: function () {
+    return {
+      message: 'test message'
+    }
+  },
+  methods: {
+    handleSendMessage: function () {
+      this.$emit('message', { message: this.message })
+    }
+  }
+})
+```
+```js
+new Vue({
+  el: '#message-event-example',
+  data: {
+    messages: []
+  },
+  methods: {
+    handleMessage: function (payload) {
+      this.messages.push(payload.message)
+    }
+  }
+})
+```
+第二个示例的重点在于子组件仍然是完全和外界解耦的。它做的事情全都是记录其自身的活动，活动记录是包括一份传入事件触发器的载荷数据在内的，只是为了展示父组件可以不关注的一个场景。
+
+### .sync 修饰符
+> 2.3.0+版本，对一个 prop 进行“双向绑定”
+
+让子组件改变父组件状态的代码更容易被区分。
+从 2.3.0 起我们重新引入了 .sync 修饰符，但是这次它只是作为一个编译时的语法糖存在。它会被扩展为一个自动更新父组件属性的 v-on 监听器。
+
+如下代码
+```html
+<comp :foo.sync="bar"></comp>
+```
+会被扩展为：
+```html
+<comp :foo="bar" @update:foo="val => bar = val"></comp>
+```
+当子组件需要更新 foo 的值时，它需要显式地触发一个更新事件：
+```js
+this.$emit('update:foo', newValue)
+```
+当使用一个对象一次性设置多个属性的时候，这个 .sync 修饰符也可以和 v-bind 一起使用：
+```html
+<comp v-bind.sync="{ foo: 1, bar: 2 }"></comp>
+```
+这个例子会为 foo 和 bar 同时添加用于更新的 v-on 监听器。
+
 ## 表单输入绑定
 ### 修饰符
 ##### .lazy
@@ -567,10 +857,6 @@ Vue.config.productionTip = false
 ### *.vue文件
 > *.vue 文件，是一个自定义的文件类型，用类 HTML 语法描述一个 Vue 组件。每个 .vue文件包含三种类型的顶级语言块 <template>, <script> 和 <style>。这三个部分分别代表了 html,js,css。
 
-### vue路由
-
-> vue.config.productiontip = false  设置为 false 以阻止 vue 在启动时生成生产提示。
-
 ### vue项目
 
 > vue 对绑定实例的元素内可以进行vue的操作，但是需要注意，不要嵌套绑定。
@@ -649,5 +935,6 @@ self.$nextTick(function(){})
 ```js
 editForm.frameWindow.registerPage.stop();
 ```
+
 
 
